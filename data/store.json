@@ -1,0 +1,85 @@
+{
+  "lobbies": [
+    {
+      "id": "lobby_main",
+      "name": "Main Lobby",
+      "code": "lunch123",
+      "createdAt": "2026-03-12T00:00:00.000Z",
+      "users": [],
+      "places": [],
+      "votes": [],
+      "orders": [],
+      "sharedCosts": []
+    },
+    {
+      "id": "lobby_5c2c6b1364",
+      "name": "2026.03.13. Péntek",
+      "code": "260313",
+      "createdAt": "2026-03-12T21:38:52.676Z",
+      "users": [
+        {
+          "id": "user_b5283dd270",
+          "name": "Laci",
+          "createdAt": "2026-03-12T21:39:02.998Z"
+        },
+        {
+          "id": "user_5e43333b12",
+          "name": "Martin",
+          "createdAt": "2026-03-12T21:39:06.918Z"
+        },
+        {
+          "id": "user_d380f8fe5a",
+          "name": "Tamás",
+          "createdAt": "2026-03-12T21:40:56.249Z"
+        },
+        {
+          "id": "user_96654d5838",
+          "name": "Benec",
+          "createdAt": "2026-03-12T21:40:59.191Z"
+        },
+        {
+          "id": "user_06875ecab0",
+          "name": "BBence",
+          "createdAt": "2026-03-12T21:41:01.855Z"
+        },
+        {
+          "id": "user_739d50fe7e",
+          "name": "Norbi",
+          "createdAt": "2026-03-12T21:41:05.808Z"
+        }
+      ],
+      "places": [],
+      "votes": [],
+      "orders": [
+        {
+          "id": "order_6ce8913efd",
+          "item": "Kannibál tortilla",
+          "price": 1250,
+          "userId": "user_b5283dd270",
+          "paidByUserId": "user_5e43333b12",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-12T21:40:18.961Z"
+        },
+        {
+          "id": "order_e70df53ad0",
+          "item": "Kannibál tortilla",
+          "price": 1250,
+          "userId": "user_5e43333b12",
+          "paidByUserId": "user_5e43333b12",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-12T21:40:27.857Z"
+        },
+        {
+          "id": "order_b994f79ee1",
+          "item": "Kannibál tortilla",
+          "price": 1250,
+          "userId": "user_96654d5838",
+          "paidByUserId": "user_5e43333b12",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-12T21:41:31.924Z"
+        }
+      ],
+      "sharedCosts": []
+    }
+  ]
+}

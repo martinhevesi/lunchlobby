@@ -1,0 +1,10 @@
+{
+  "name": "lunch-lobby",
+  "version": "1.0.0",
+  "description": "Lightweight lunch voting and cost-sharing app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}

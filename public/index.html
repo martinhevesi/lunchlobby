@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lunch Lobby</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Lunch Lobby</h1>
+      <p class="sub">Vote where to eat, track orders, split costs, and manage lobbies.</p>
+
+      <div class="mode-switch card">
+        <button id="userModeBtn" type="button">User Mode</button>
+        <button id="adminModeBtn" type="button">Admin Mode</button>
+      </div>
+
+      <section id="userArea">
+        <section id="registerSection" class="card">
+          <h2>Enter Lobby</h2>
+          <form id="registerForm">
+            <label>
+              Lobby
+              <select id="lobbySelect" required></select>
+            </label>
+            <label>
+              Your Name
+              <input id="nameInput" required />
+            </label>
+            <label>
+              Lobby Secret Code
+              <input id="codeInput" type="password" required />
+            </label>
+            <button type="submit">Join</button>
+          </form>
+        </section>
+
+        <section id="appSection" class="hidden">
+          <div class="grid">
+            <article class="card">
+              <h2>Places & Votes</h2>
+              <form id="placeForm" class="inline-form">
+                <input id="placeInput" placeholder="Add place" required />
+                <button type="submit">Add</button>
+              </form>
+              <ul id="placesList"></ul>
+            </article>
+
+            <article class="card">
+              <h2>Food Orders</h2>
+              <form id="orderForm">
+                <label>
+                  Food Item
+                  <input id="orderItemInput" required />
+                </label>
+                <label>
+                  Price
+                  <input id="orderPriceInput" type="number" min="0" step="0.01" required />
+                </label>
+                <label>
+                  For User
+                  <select id="orderUserSelect"></select>
+                </label>
+                <label>
+                  Paid By
+                  <select id="orderPayerSelect"></select>
+                </label>
+                <button type="submit">Add Order</button>
+              </form>
+              <ul id="ordersList"></ul>
+            </article>
+
+            <article class="card">
+              <h2>Shared Costs</h2>
+              <form id="sharedForm">
+                <label>
+                  Description
+                  <input id="sharedDescInput" placeholder="Delivery fee" required />
+                </label>
+                <label>
+                  Amount
+                  <input id="sharedAmountInput" type="number" min="0" step="0.01" required />
+                </label>
+                <label>
+                  Paid By
+                  <select id="sharedPayerSelect"></select>
+                </label>
+                <fieldset>
+                  <legend>Split Among</legend>
+                  <div id="splitUsers"></div>
+                </fieldset>
+                <button type="submit">Add Shared Cost</button>
+              </form>
+              <ul id="sharedList"></ul>
+            </article>
+
+            <article class="card">
+              <h2>Summary</h2>
+              <p id="meLabel"></p>
+              <ul id="summaryList"></ul>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <section id="adminArea" class="hidden">
+        <section class="card" id="adminLoginSection">
+          <h2>Admin Login</h2>
+          <form id="adminLoginForm">
+            <label>
+              Admin Code
+              <input id="adminCodeInput" type="password" required />
+            </label>
+            <button type="submit">Enter Admin</button>
+          </form>
+        </section>
+
+        <section id="adminPanel" class="hidden">
+          <div class="grid">
+            <article class="card">
+              <h2>Create Lobby</h2>
+              <form id="createLobbyForm">
+                <label>
+                  Lobby Name
+                  <input id="newLobbyName" required />
+                </label>
+                <label>
+                  Lobby Secret Code
+                  <input id="newLobbyCode" required />
+                </label>
+                <button type="submit">Create Lobby</button>
+              </form>
+            </article>
+
+            <article class="card">
+              <h2>Manage Existing Lobby</h2>
+              <label>
+                Lobby
+                <select id="adminLobbySelect"></select>
+              </label>
+              <p id="adminLobbyInfo" class="muted"></p>
+            </article>
+
+            <article class="card">
+              <h2>Add User To Lobby</h2>
+              <form id="adminAddUserForm" class="inline-form">
+                <input id="adminUserNameInput" placeholder="User name" required />
+                <button type="submit">Add User</button>
+              </form>
+            </article>
+
+            <article class="card">
+              <h2>Users</h2>
+              <ul id="adminUsersList"></ul>
+            </article>
+
+            <article class="card">
+              <h2>Places</h2>
+              <ul id="adminPlacesList"></ul>
+            </article>
+
+            <article class="card">
+              <h2>Orders</h2>
+              <ul id="adminOrdersList"></ul>
+            </article>
+
+            <article class="card">
+              <h2>Shared Costs</h2>
+              <ul id="adminSharedList"></ul>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
