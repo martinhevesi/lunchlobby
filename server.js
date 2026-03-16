@@ -3,21 +3,52 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+let webpush = null;
+try {
+  webpush = require("web-push");
+} catch {
+  webpush = null;
+}
+
 const PORT = Number(process.env.PORT || 3000);
 const DEFAULT_LOBBY_CODE = process.env.LOBBY_CODE || "lunch123";
 const ADMIN_CODE = process.env.ADMIN_CODE || "admin123";
+const WEB_PUSH_SUBJECT = process.env.WEB_PUSH_SUBJECT || "mailto:admin@example.com";
+const WEB_PUSH_PUBLIC_KEY = process.env.WEB_PUSH_PUBLIC_KEY || "";
+const WEB_PUSH_PRIVATE_KEY = process.env.WEB_PUSH_PRIVATE_KEY || "";
+const PUSH_ENABLED = Boolean(webpush && WEB_PUSH_PUBLIC_KEY && WEB_PUSH_PRIVATE_KEY);
+
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "store.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
+const VOTING_ENDING_SOON_MINUTES = 5;
 
 const sessions = new Map();
+const sseClientsByLobby = new Map();
+
+if (PUSH_ENABLED) {
+  webpush.setVapidDetails(WEB_PUSH_SUBJECT, WEB_PUSH_PUBLIC_KEY, WEB_PUSH_PRIVATE_KEY);
+}
 
 function uid(prefix) {
   return `${prefix}_${crypto.randomBytes(5).toString("hex")}`;
 }
 
-function createEmptyLobby(name, code) {
+function normalizeSubscription(item) {
+  if (!item || typeof item !== "object") return null;
+  const endpoint = item.endpoint || item.subscription?.endpoint;
+  const keys = item.keys || item.subscription?.keys;
+  if (!endpoint || !keys || !keys.p256dh || !keys.auth) return null;
   return {
+    endpoint,
+    keys: { p256dh: keys.p256dh, auth: keys.auth },
+    userId: item.userId || null,
+    createdAt: item.createdAt || new Date().toISOString()
+  };
+}
+
+function createEmptyLobby(name, code) {
+  return normalizeLobby({
     id: uid("lobby"),
     name,
     code,
@@ -26,7 +57,37 @@ function createEmptyLobby(name, code) {
     places: [],
     votes: [],
     orders: [],
-    sharedCosts: []
+    sharedCosts: [],
+    notifications: [],
+    voting: null,
+    pushSubscriptions: []
+  });
+}
+
+function normalizeLobby(lobby) {
+  return {
+    id: lobby.id || uid("lobby"),
+    name: lobby.name || "Lobby",
+    code: lobby.code || DEFAULT_LOBBY_CODE,
+    createdAt: lobby.createdAt || new Date().toISOString(),
+    users: Array.isArray(lobby.users) ? lobby.users : [],
+    places: Array.isArray(lobby.places) ? lobby.places : [],
+    votes: Array.isArray(lobby.votes) ? lobby.votes : [],
+    orders: Array.isArray(lobby.orders) ? lobby.orders : [],
+    sharedCosts: Array.isArray(lobby.sharedCosts) ? lobby.sharedCosts : [],
+    notifications: Array.isArray(lobby.notifications) ? lobby.notifications : [],
+    voting: lobby.voting && typeof lobby.voting === "object"
+      ? {
+          startedAt: lobby.voting.startedAt || null,
+          endsAt: lobby.voting.endsAt || null,
+          endingSoonNotified: Boolean(lobby.voting.endingSoonNotified),
+          endedNotified: Boolean(lobby.voting.endedNotified),
+          closed: Boolean(lobby.voting.closed)
+        }
+      : null,
+    pushSubscriptions: Array.isArray(lobby.pushSubscriptions)
+      ? lobby.pushSubscriptions.map(normalizeSubscription).filter(Boolean)
+      : []
   };
 }
 
@@ -40,32 +101,37 @@ function ensureDataFile() {
   }
 }
 
+function writeData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+}
+
 function readData() {
   ensureDataFile();
   const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
 
   if (!Array.isArray(parsed.lobbies)) {
-    // Backward compatibility for the original single-lobby structure.
     const migrated = {
       lobbies: [
-        {
+        normalizeLobby({
           ...createEmptyLobby("Main Lobby", DEFAULT_LOBBY_CODE),
           users: Array.isArray(parsed.users) ? parsed.users : [],
           places: Array.isArray(parsed.places) ? parsed.places : [],
           votes: Array.isArray(parsed.votes) ? parsed.votes : [],
           orders: Array.isArray(parsed.orders) ? parsed.orders : [],
           sharedCosts: Array.isArray(parsed.sharedCosts) ? parsed.sharedCosts : []
-        }
+        })
       ]
     };
     writeData(migrated);
     return migrated;
   }
-  return parsed;
-}
 
-function writeData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+  const normalized = { lobbies: parsed.lobbies.map(normalizeLobby) };
+  const changed = JSON.stringify(parsed) !== JSON.stringify(normalized);
+  if (changed) {
+    writeData(normalized);
+  }
+  return normalized;
 }
 
 function sendJson(res, status, payload) {
@@ -97,13 +163,15 @@ function parseBody(req) {
   });
 }
 
-function getToken(req) {
-  const token = req.headers["x-session-token"];
-  return typeof token === "string" ? token : null;
+function getToken(req, url) {
+  const headerToken = req.headers["x-session-token"];
+  if (headerToken && typeof headerToken === "string") return headerToken;
+  const queryToken = url.searchParams.get("token");
+  return queryToken || null;
 }
 
-function authLobbyUser(req, data) {
-  const token = getToken(req);
+function authLobbyUser(req, data, url) {
+  const token = getToken(req, url);
   const session = token ? sessions.get(token) : null;
   if (!session || session.type !== "user") return null;
 
@@ -114,8 +182,8 @@ function authLobbyUser(req, data) {
   return { lobby, user };
 }
 
-function authAdmin(req) {
-  const token = getToken(req);
+function authAdmin(req, url) {
+  const token = getToken(req, url);
   const session = token ? sessions.get(token) : null;
   return session && session.type === "admin" ? session : null;
 }
@@ -178,7 +246,13 @@ function publicLobbyState(user, lobby) {
     votes: lobby.votes,
     orders: lobby.orders,
     sharedCosts: lobby.sharedCosts,
-    summary: computeSummary(lobby)
+    voting: lobby.voting,
+    notifications: lobby.notifications.slice(-30),
+    summary: computeSummary(lobby),
+    push: {
+      enabled: PUSH_ENABLED,
+      supported: Boolean(webpush)
+    }
   };
 }
 
@@ -192,8 +266,120 @@ function adminLobbyState(lobby) {
     places: lobby.places,
     votes: lobby.votes,
     orders: lobby.orders,
-    sharedCosts: lobby.sharedCosts
+    sharedCosts: lobby.sharedCosts,
+    voting: lobby.voting,
+    notifications: lobby.notifications.slice(-50),
+    pushSubscriptionCount: lobby.pushSubscriptions.length
   };
+}
+
+function addNotification(lobby, event) {
+  const payload = {
+    id: uid("notif"),
+    type: event.type,
+    title: event.title || "",
+    message: event.message || "",
+    createdAt: new Date().toISOString(),
+    byUserId: event.byUserId || null,
+    meta: event.meta || {}
+  };
+  lobby.notifications.push(payload);
+  if (lobby.notifications.length > 200) {
+    lobby.notifications = lobby.notifications.slice(-200);
+  }
+  return payload;
+}
+
+function broadcastLobbyEvent(lobbyId, event) {
+  const clients = sseClientsByLobby.get(lobbyId);
+  if (!clients || clients.size === 0) return;
+  const line = `data: ${JSON.stringify(event)}\n\n`;
+  for (const res of clients) {
+    res.write(line);
+  }
+}
+
+async function sendPushToLobby(data, lobby, event) {
+  if (!PUSH_ENABLED || !lobby.pushSubscriptions.length) return;
+  const payload = JSON.stringify({
+    title: event.title || "Lunch Lobby",
+    body: event.message || "",
+    type: event.type,
+    createdAt: event.createdAt,
+    lobbyId: lobby.id
+  });
+
+  const keep = [];
+  let changed = false;
+
+  for (const sub of lobby.pushSubscriptions) {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
+      keep.push(sub);
+    } catch (err) {
+      const status = Number(err && err.statusCode);
+      if (status === 404 || status === 410) {
+        changed = true;
+      } else {
+        keep.push(sub);
+      }
+    }
+  }
+
+  if (changed) {
+    lobby.pushSubscriptions = keep;
+    writeData(data);
+  }
+}
+
+function emitNotification(data, lobby, event) {
+  const notification = addNotification(lobby, event);
+  writeData(data);
+  broadcastLobbyEvent(lobby.id, notification);
+  sendPushToLobby(data, lobby, notification).catch(() => {});
+  return notification;
+}
+
+function isVotingOpen(lobby) {
+  if (!lobby.voting) return true;
+  if (lobby.voting.closed) return false;
+  if (!lobby.voting.endsAt) return true;
+  return Date.now() < Date.parse(lobby.voting.endsAt);
+}
+
+function checkVotingMilestones() {
+  const data = readData();
+  const now = Date.now();
+
+  for (const lobby of data.lobbies) {
+    if (!lobby.voting || !lobby.voting.endsAt || lobby.voting.closed) continue;
+    const endTs = Date.parse(lobby.voting.endsAt);
+    const msLeft = endTs - now;
+    const soonThresholdMs = VOTING_ENDING_SOON_MINUTES * 60 * 1000;
+
+    if (msLeft > 0 && msLeft <= soonThresholdMs && !lobby.voting.endingSoonNotified) {
+      lobby.voting.endingSoonNotified = true;
+      emitNotification(data, lobby, {
+        type: "voting_ending_soon",
+        title: "Voting Ending Soon",
+        message: `Voting is ending in less than ${VOTING_ENDING_SOON_MINUTES} minutes.`
+      });
+    }
+
+    if (msLeft <= 0 && !lobby.voting.closed) {
+      lobby.voting.closed = true;
+      if (!lobby.voting.endedNotified) {
+        lobby.voting.endedNotified = true;
+        emitNotification(data, lobby, {
+          type: "voting_ended",
+          title: "Voting Ended",
+          message: "Voting window has ended."
+        });
+      } else {
+        writeData(data);
+      }
+    }
+  }
 }
 
 function serveStatic(req, res) {
@@ -214,7 +400,8 @@ function serveStatic(req, res) {
     ".html": "text/html; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
-    ".json": "application/json; charset=utf-8"
+    ".json": "application/json; charset=utf-8",
+    ".webmanifest": "application/manifest+json; charset=utf-8"
   };
   res.writeHead(200, { "Content-Type": map[ext] || "text/plain; charset=utf-8" });
   fs.createReadStream(abs).pipe(res);
@@ -223,6 +410,40 @@ function serveStatic(req, res) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
+
+    if (req.method === "GET" && url.pathname === "/api/stream") {
+      const data = readData();
+      const auth = authLobbyUser(req, data, url);
+      if (!auth) {
+        sendJson(res, 401, { error: "Unauthorized stream request." });
+        return;
+      }
+      const { lobby } = auth;
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive"
+      });
+      res.write("data: " + JSON.stringify({ type: "stream_ready", message: "connected" }) + "\n\n");
+
+      const set = sseClientsByLobby.get(lobby.id) || new Set();
+      set.add(res);
+      sseClientsByLobby.set(lobby.id, set);
+
+      const heartbeat = setInterval(() => {
+        res.write(": ping\n\n");
+      }, 25000);
+
+      req.on("close", () => {
+        clearInterval(heartbeat);
+        set.delete(res);
+        if (set.size === 0) {
+          sseClientsByLobby.delete(lobby.id);
+        }
+      });
+      return;
+    }
 
     if (req.method === "GET" && url.pathname === "/api/lobbies") {
       const data = readData();
@@ -282,11 +503,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname.startsWith("/api/admin/")) {
-      if (!authAdmin(req)) {
+      if (!authAdmin(req, url)) {
         sendJson(res, 401, { error: "Unauthorized admin request." });
         return;
       }
-
       const data = readData();
 
       if (req.method === "GET" && url.pathname === "/api/admin/lobbies") {
@@ -300,7 +520,8 @@ const server = http.createServer(async (req, res) => {
             users: lobby.users.length,
             places: lobby.places.length,
             orders: lobby.orders.length,
-            sharedCosts: lobby.sharedCosts.length
+            sharedCosts: lobby.sharedCosts.length,
+            pushSubscriptions: lobby.pushSubscriptions.length
           }))
         );
         return;
@@ -375,6 +596,7 @@ const server = http.createServer(async (req, res) => {
           .filter((c) => c.paidByUserId !== userId)
           .map((c) => ({ ...c, splitAmong: c.splitAmong.filter((id) => id !== userId) }))
           .filter((c) => c.splitAmong.length > 0);
+        lobby.pushSubscriptions = lobby.pushSubscriptions.filter((s) => s.userId !== userId);
         writeData(data);
         sendJson(res, 200, adminLobbyState(lobby));
         return;
@@ -434,7 +656,7 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname.startsWith("/api/")) {
       const data = readData();
-      const auth = authLobbyUser(req, data);
+      const auth = authLobbyUser(req, data, url);
       if (!auth) {
         sendJson(res, 401, { error: "Unauthorized. Register first." });
         return;
@@ -443,6 +665,52 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === "GET" && url.pathname === "/api/state") {
         sendJson(res, 200, publicLobbyState(user, lobby));
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/push/public-key") {
+        sendJson(res, 200, {
+          enabled: PUSH_ENABLED,
+          publicKey: PUSH_ENABLED ? WEB_PUSH_PUBLIC_KEY : null
+        });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/push/subscribe") {
+        if (!PUSH_ENABLED) {
+          sendJson(res, 400, { error: "Web Push is not configured on server." });
+          return;
+        }
+        const body = await parseBody(req);
+        const subscription = normalizeSubscription(body.subscription || body);
+        if (!subscription) {
+          sendJson(res, 400, { error: "Invalid push subscription payload." });
+          return;
+        }
+        const existingIndex = lobby.pushSubscriptions.findIndex(
+          (x) => x.endpoint === subscription.endpoint
+        );
+        const next = { ...subscription, userId: user.id, createdAt: new Date().toISOString() };
+        if (existingIndex >= 0) {
+          lobby.pushSubscriptions[existingIndex] = next;
+        } else {
+          lobby.pushSubscriptions.push(next);
+        }
+        writeData(data);
+        sendJson(res, 200, { ok: true, count: lobby.pushSubscriptions.length });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") {
+        const body = await parseBody(req);
+        const endpoint = String(body.endpoint || "").trim();
+        if (!endpoint) {
+          sendJson(res, 400, { error: "Endpoint is required." });
+          return;
+        }
+        lobby.pushSubscriptions = lobby.pushSubscriptions.filter((x) => x.endpoint !== endpoint);
+        writeData(data);
+        sendJson(res, 200, { ok: true, count: lobby.pushSubscriptions.length });
         return;
       }
 
@@ -467,6 +735,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && url.pathname === "/api/votes") {
+        if (!isVotingOpen(lobby)) {
+          sendJson(res, 400, { error: "Voting is closed." });
+          return;
+        }
         const body = await parseBody(req);
         const placeId = String(body.placeId || "");
         if (!lobby.places.find((p) => p.id === placeId)) {
@@ -564,6 +836,60 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      if (req.method === "POST" && url.pathname === "/api/voting/start") {
+        const body = await parseBody(req);
+        const minutesRaw = Number(body.durationMinutes);
+        const durationMinutes = Number.isFinite(minutesRaw) ? minutesRaw : 30;
+        if (durationMinutes <= 0 || durationMinutes > 300) {
+          sendJson(res, 400, { error: "Duration must be between 1 and 300 minutes." });
+          return;
+        }
+        const startedAt = new Date();
+        const endsAt = new Date(startedAt.getTime() + durationMinutes * 60 * 1000);
+        lobby.voting = {
+          startedAt: startedAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+          endingSoonNotified: false,
+          endedNotified: false,
+          closed: false
+        };
+        emitNotification(data, lobby, {
+          type: "voting_started",
+          title: "Voting Started",
+          message: `${user.name} started voting. It ends at ${endsAt.toLocaleTimeString()}.`,
+          byUserId: user.id,
+          meta: { endsAt: endsAt.toISOString() }
+        });
+        sendJson(res, 200, publicLobbyState(user, lobby));
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/notify/ordered") {
+        const body = await parseBody(req);
+        const message = String(body.message || "").trim() || `${user.name} marked: food has been ordered.`;
+        emitNotification(data, lobby, {
+          type: "food_ordered",
+          title: "Food Ordered",
+          message,
+          byUserId: user.id
+        });
+        sendJson(res, 200, publicLobbyState(user, lobby));
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/notify/arrived") {
+        const body = await parseBody(req);
+        const message = String(body.message || "").trim() || `${user.name} marked: food has arrived.`;
+        emitNotification(data, lobby, {
+          type: "food_arrived",
+          title: "Food Arrived",
+          message,
+          byUserId: user.id
+        });
+        sendJson(res, 200, publicLobbyState(user, lobby));
+        return;
+      }
+
       sendJson(res, 404, { error: "API route not found." });
       return;
     }
@@ -575,8 +901,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 ensureDataFile();
+setInterval(checkVotingMilestones, 15_000);
 server.listen(PORT, () => {
   console.log(`Lunch Lobby running on http://localhost:${PORT}`);
   console.log(`Default lobby code: ${DEFAULT_LOBBY_CODE}`);
   console.log(`Admin code: ${ADMIN_CODE}`);
+  console.log(`Web Push: ${PUSH_ENABLED ? "enabled" : "disabled"}`);
 });

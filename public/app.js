@@ -8,6 +8,8 @@ let lobbies = [];
 let adminLobbies = [];
 let adminLobbyState = null;
 let mode = "user";
+let stream = null;
+let pushKeyCache = null;
 
 const userArea = document.getElementById("userArea");
 const adminArea = document.getElementById("adminArea");
@@ -19,6 +21,7 @@ const lobbySelect = document.getElementById("lobbySelect");
 const nameInput = document.getElementById("nameInput");
 const codeInput = document.getElementById("codeInput");
 const meLabel = document.getElementById("meLabel");
+const votingStatus = document.getElementById("votingStatus");
 
 const adminLoginSection = document.getElementById("adminLoginSection");
 const adminPanel = document.getElementById("adminPanel");
@@ -41,20 +44,8 @@ async function api(path, method = "GET", body, token) {
     body: body ? JSON.stringify(body) : undefined
   });
   const payload = await res.json();
-  if (!res.ok) {
-    throw new Error(payload.error || "Request failed");
-  }
+  if (!res.ok) throw new Error(payload.error || "Request failed");
   return payload;
-}
-
-function userNameById(id) {
-  const user = state?.users.find((u) => u.id === id);
-  return user ? user.name : "Unknown";
-}
-
-function adminUserNameById(id) {
-  const user = adminLobbyState?.users.find((u) => u.id === id);
-  return user ? user.name : "Unknown";
 }
 
 function switchMode(nextMode) {
@@ -66,11 +57,25 @@ function switchMode(nextMode) {
 function setUserLoggedIn(loggedIn) {
   registerSection.classList.toggle("hidden", loggedIn);
   appSection.classList.toggle("hidden", !loggedIn);
+  if (!loggedIn && stream) {
+    stream.close();
+    stream = null;
+  }
 }
 
 function setAdminLoggedIn(loggedIn) {
   adminLoginSection.classList.toggle("hidden", loggedIn);
   adminPanel.classList.toggle("hidden", !loggedIn);
+}
+
+function userNameById(id) {
+  const user = state?.users.find((u) => u.id === id);
+  return user ? user.name : "Unknown";
+}
+
+function adminUserNameById(id) {
+  const user = adminLobbyState?.users.find((u) => u.id === id);
+  return user ? user.name : "Unknown";
 }
 
 function renderLobbySelect() {
@@ -94,9 +99,132 @@ function populateUserOptions(selectEl, selectedId) {
   }
 }
 
+function renderVotingStatus() {
+  if (!state?.voting) {
+    votingStatus.textContent = "No active voting window.";
+    return;
+  }
+  const end = new Date(state.voting.endsAt);
+  const closed = state.voting.closed ? "Closed" : "Open";
+  votingStatus.textContent = `Voting: ${closed} (ends at ${end.toLocaleTimeString()})`;
+}
+
+function renderNotifications() {
+  const list = document.getElementById("notificationsList");
+  list.innerHTML = "";
+  const items = (state?.notifications || []).slice().reverse();
+  for (const n of items) {
+    const li = document.createElement("li");
+    const ts = new Date(n.createdAt).toLocaleTimeString();
+    li.textContent = `${ts} - ${n.title || n.type}: ${n.message}`;
+    list.appendChild(li);
+  }
+}
+
+function notifyBrowser(title, message) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    new Notification(title, { body: message });
+  }
+}
+
+function handleIncomingNotification(event) {
+  if (!event || !event.type || event.type === "stream_ready") return;
+  if (!state) return;
+  state.notifications = [...(state.notifications || []), event].slice(-30);
+  renderNotifications();
+  notifyBrowser(event.title || "Lunch Lobby", event.message || "New event");
+}
+
+function setupEventStream() {
+  if (!userToken) return;
+  if (stream) stream.close();
+  stream = new EventSource(`/api/stream?token=${encodeURIComponent(userToken)}`);
+  stream.onmessage = (msg) => {
+    try {
+      const payload = JSON.parse(msg.data);
+      handleIncomingNotification(payload);
+    } catch {}
+  };
+  stream.onerror = () => {
+    if (stream) {
+      stream.close();
+      stream = null;
+    }
+    setTimeout(() => {
+      if (userToken && !stream) setupEventStream();
+    }, 5000);
+  };
+}
+
+function supportsWebPush() {
+  return (
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window
+  );
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function getPushPublicKey() {
+  if (pushKeyCache !== null) return pushKeyCache;
+  const response = await api("/api/push/public-key", "GET", null, userToken);
+  pushKeyCache = response.publicKey || null;
+  return pushKeyCache;
+}
+
+async function subscribeToPush(askPermission) {
+  if (!supportsWebPush()) {
+    if (askPermission) alert("Web Push is not supported in this browser.");
+    return;
+  }
+  if (!userToken) return;
+
+  if (askPermission && Notification.permission !== "granted") {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      alert("Push notification permission was not granted.");
+      return;
+    }
+  }
+  if (!askPermission && Notification.permission !== "granted") return;
+
+  const publicKey = await getPushPublicKey();
+  if (!publicKey) {
+    if (askPermission) {
+      alert("Server-side Web Push is not configured yet.");
+    }
+    return;
+  }
+
+  await navigator.serviceWorker.register("/service-worker.js");
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+  }
+
+  await api("/api/push/subscribe", "POST", { subscription }, userToken);
+}
+
 function renderUserState() {
   if (!state) return;
   meLabel.textContent = `Lobby: ${state.lobby.name} | Logged in as: ${state.me.name}`;
+  renderVotingStatus();
+  renderNotifications();
 
   const placesList = document.getElementById("placesList");
   placesList.innerHTML = "";
@@ -106,7 +234,7 @@ function renderUserState() {
     li.textContent = `${place.name} (${place.voteCount} vote${place.voteCount === 1 ? "" : "s"}) `;
     const btn = document.createElement("button");
     btn.textContent = myVote?.placeId === place.id ? "Voted" : "Vote";
-    btn.disabled = myVote?.placeId === place.id;
+    btn.disabled = myVote?.placeId === place.id || Boolean(state.voting?.closed);
     btn.onclick = async () => {
       try {
         state = await api("/api/votes", "POST", { placeId: place.id }, userToken);
@@ -185,7 +313,6 @@ function addDeleteButton(li, title, handler) {
 
 function renderAdminState() {
   if (!adminLobbyState) return;
-
   adminLobbyInfo.textContent = `Lobby code: ${adminLobbyState.code} | Users: ${adminLobbyState.users.length} | Places: ${adminLobbyState.places.length}`;
 
   const usersList = document.getElementById("adminUsersList");
@@ -289,6 +416,8 @@ async function refreshUserState() {
   state = await api("/api/state", "GET", null, userToken);
   setUserLoggedIn(true);
   renderUserState();
+  setupEventStream();
+  subscribeToPush(false).catch(() => {});
 }
 
 async function refreshAdminLobbies(selectedId) {
@@ -298,11 +427,9 @@ async function refreshAdminLobbies(selectedId) {
     renderAdminLobbyOptions(null);
     return;
   }
-
   const wanted = selectedId && adminLobbies.some((x) => x.id === selectedId)
     ? selectedId
     : adminLobbies[0].id;
-
   renderAdminLobbyOptions(wanted);
   adminLobbyState = await api(`/api/admin/lobbies/${wanted}`, "GET", null, adminToken);
 }
@@ -318,6 +445,7 @@ registerForm.addEventListener("submit", async (e) => {
     userToken = result.token;
     localStorage.setItem(userTokenKey, userToken);
     codeInput.value = "";
+    pushKeyCache = null;
     await refreshUserState();
   } catch (err) {
     alert(err.message);
@@ -326,8 +454,8 @@ registerForm.addEventListener("submit", async (e) => {
 
 document.getElementById("placeForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const placeInput = document.getElementById("placeInput");
   try {
+    const placeInput = document.getElementById("placeInput");
     state = await api("/api/places", "POST", { name: placeInput.value.trim() }, userToken);
     placeInput.value = "";
     renderUserState();
@@ -372,6 +500,50 @@ document.getElementById("sharedForm").addEventListener("submit", async (e) => {
     renderUserState();
   } catch (err) {
     alert(err.message);
+  }
+});
+
+document.getElementById("votingForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const durationMinutes = Number(document.getElementById("votingMinutesInput").value);
+    state = await api("/api/voting/start", "POST", { durationMinutes }, userToken);
+    renderUserState();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById("orderedForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const message = document.getElementById("orderedMessageInput").value.trim();
+    state = await api("/api/notify/ordered", "POST", { message }, userToken);
+    document.getElementById("orderedMessageInput").value = "";
+    renderUserState();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById("arrivedForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const message = document.getElementById("arrivedMessageInput").value.trim();
+    state = await api("/api/notify/arrived", "POST", { message }, userToken);
+    document.getElementById("arrivedMessageInput").value = "";
+    renderUserState();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById("enableNotificationsBtn").addEventListener("click", async () => {
+  try {
+    await subscribeToPush(true);
+    alert("Push notifications are enabled for this device/browser.");
+  } catch (err) {
+    alert(err.message || "Could not enable push notifications.");
   }
 });
 

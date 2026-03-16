@@ -9,7 +9,10 @@
       "places": [],
       "votes": [],
       "orders": [],
-      "sharedCosts": []
+      "sharedCosts": [],
+      "notifications": [],
+      "voting": null,
+      "pushSubscriptions": []
     },
     {
       "id": "lobby_5c2c6b1364",
@@ -79,7 +82,130 @@
           "createdAt": "2026-03-12T21:41:31.924Z"
         }
       ],
-      "sharedCosts": []
+      "sharedCosts": [],
+      "notifications": [
+        {
+          "id": "notif_24f3124828",
+          "type": "food_arrived",
+          "title": "Food Arrived",
+          "message": "Martin marked: food has arrived.",
+          "createdAt": "2026-03-16T19:09:02.209Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {}
+        },
+        {
+          "id": "notif_595e4092ba",
+          "type": "food_arrived",
+          "title": "Food Arrived",
+          "message": "Martin marked: food has arrived.",
+          "createdAt": "2026-03-16T19:10:05.226Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {}
+        },
+        {
+          "id": "notif_7af6426e9d",
+          "type": "food_ordered",
+          "title": "Food Ordered",
+          "message": "Martin marked: food has been ordered.",
+          "createdAt": "2026-03-16T19:10:53.549Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {}
+        },
+        {
+          "id": "notif_8a9c723f3d",
+          "type": "voting_started",
+          "title": "Voting Started",
+          "message": "Martin started voting. It ends at 20:41:02.",
+          "createdAt": "2026-03-16T19:11:02.767Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {
+            "endsAt": "2026-03-16T19:41:02.747Z"
+          }
+        },
+        {
+          "id": "notif_6194c1c124",
+          "type": "food_arrived",
+          "title": "Food Arrived",
+          "message": "megjött",
+          "createdAt": "2026-03-16T19:11:17.226Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {}
+        },
+        {
+          "id": "notif_dab108c0d8",
+          "type": "food_arrived",
+          "title": "Food Arrived",
+          "message": "Martin marked: food has arrived.",
+          "createdAt": "2026-03-16T19:11:24.090Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {}
+        },
+        {
+          "id": "notif_ac234595f7",
+          "type": "voting_started",
+          "title": "Voting Started",
+          "message": "Martin started voting. It ends at 20:13:43.",
+          "createdAt": "2026-03-16T19:11:43.653Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {
+            "endsAt": "2026-03-16T19:13:43.653Z"
+          }
+        },
+        {
+          "id": "notif_4d748ac579",
+          "type": "voting_ending_soon",
+          "title": "Voting Ending Soon",
+          "message": "Voting is ending in less than 5 minutes.",
+          "createdAt": "2026-03-16T19:11:56.190Z",
+          "byUserId": null,
+          "meta": {}
+        },
+        {
+          "id": "notif_2b5001140a",
+          "type": "food_arrived",
+          "title": "Food Arrived",
+          "message": "Martin marked: food has arrived.",
+          "createdAt": "2026-03-16T19:12:06.230Z",
+          "byUserId": "user_5e43333b12",
+          "meta": {}
+        },
+        {
+          "id": "notif_a758f3ba6f",
+          "type": "voting_ended",
+          "title": "Voting Ended",
+          "message": "Voting window has ended.",
+          "createdAt": "2026-03-16T19:13:56.255Z",
+          "byUserId": null,
+          "meta": {}
+        }
+      ],
+      "voting": {
+        "startedAt": "2026-03-16T19:11:43.653Z",
+        "endsAt": "2026-03-16T19:13:43.653Z",
+        "endingSoonNotified": true,
+        "endedNotified": true,
+        "closed": true
+      },
+      "pushSubscriptions": [
+        {
+          "endpoint": "https://fcm.googleapis.com/fcm/send/dpHFYPkkM4o:APA91bEG5wt2XYXNsQTvVTCWfouUlkqOhgWkGv23dRKny6JZXYxA0ITccrto8ewlOiDDm_aRIOWARGCuuvZC2xqqAxh7zCeB_GgXugCf1AvXUUAHJY9Mi6TIEy594oldeBKCY2kDwaar",
+          "keys": {
+            "p256dh": "BPGkERfxuNzoZ4CQK9k6qFkPgLQ2gpIW-s4-oakAf0EIbLf1cH6_V17Sz2ccSr_33t34yMpkvEtphiNLlqjbmsc",
+            "auth": "S8nz8XN39VyRKwuENjNMjw"
+          },
+          "userId": "user_5e43333b12",
+          "createdAt": "2026-03-16T19:10:01.616Z"
+        },
+        {
+          "endpoint": "https://fcm.googleapis.com/fcm/send/doYYMOR-bdk:APA91bG6GaZV4FaovjWZ-K_pMVlb3oyeuPW6e36a4Icz9SdtERdWZOc5l4GoJm8c9HlUbt-pGAwzMadyNjyAZw-WH14BvugnISK0I04juYKJspP_JPzMFInzxtTm1WTUtBu8vqTCzPmA",
+          "keys": {
+            "p256dh": "BAZ6jNcwJuD5bKHm24p9YwhLvBw7li7exu9gcMffTlihpqSVsJxnsGWqQbpHNKnUtk8txvW26djjzvBeqrMdYXU",
+            "auth": "kyt_1pz_zZatUDuXrrkVsQ"
+          },
+          "userId": "user_b5283dd270",
+          "createdAt": "2026-03-16T19:14:41.947Z"
+        }
+      ]
     }
   ]
 }
