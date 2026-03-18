@@ -208,6 +208,21 @@ legend {
   margin: 6px 0 0;
 }
 
+#notificationsList {
+  max-height: 220px;
+  overflow: auto;
+}
+
+#votingForm,
+#orderedForm,
+#arrivedForm {
+  margin-bottom: 8px;
+}
+
+#enableNotificationsBtn {
+  margin-bottom: 12px;
+}
+
 .hidden {
   display: none;
 }

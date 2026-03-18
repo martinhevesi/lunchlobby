@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1d4ed8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>Lunch Lobby</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -99,6 +102,25 @@
               <h2>Summary</h2>
               <p id="meLabel"></p>
               <ul id="summaryList"></ul>
+            </article>
+
+            <article class="card">
+              <h2>Voting & Alerts</h2>
+              <p id="votingStatus" class="muted"></p>
+              <form id="votingForm" class="inline-form">
+                <input id="votingMinutesInput" type="number" min="1" max="300" value="30" />
+                <button type="submit">Start Voting</button>
+              </form>
+              <form id="orderedForm" class="inline-form">
+                <input id="orderedMessageInput" placeholder="Optional ordered message" />
+                <button type="submit">Food Ordered</button>
+              </form>
+              <form id="arrivedForm" class="inline-form">
+                <input id="arrivedMessageInput" placeholder="Optional arrived message" />
+                <button type="submit">Food Arrived</button>
+              </form>
+              <button id="enableNotificationsBtn" type="button">Enable Push Notifications</button>
+              <ul id="notificationsList"></ul>
             </article>
           </div>
         </section>
