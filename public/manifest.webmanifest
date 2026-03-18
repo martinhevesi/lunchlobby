@@ -1,0 +1,10 @@
+{
+  "name": "Lunch Lobby",
+  "short_name": "LunchLobby",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fb",
+  "theme_color": "#1d4ed8",
+  "description": "Team lunch voting, ordering and shared-cost tracking.",
+  "icons": []
+}

@@ -127,7 +127,8 @@ function readData() {
   }
 
   const normalized = { lobbies: parsed.lobbies.map(normalizeLobby) };
-  if (JSON.stringify(parsed) !== JSON.stringify(normalized)) {
+  const changed = JSON.stringify(parsed) !== JSON.stringify(normalized);
+  if (changed) {
     writeData(normalized);
   }
   return normalized;
@@ -160,7 +161,8 @@ function parseBody(req) {
 function getToken(req, url) {
   const headerToken = req.headers["x-session-token"];
   if (headerToken && typeof headerToken === "string") return headerToken;
-  return url.searchParams.get("token") || null;
+  const queryToken = url.searchParams.get("token");
+  return queryToken || null;
 }
 
 function authLobbyUser(req, data, url) {
@@ -236,7 +238,10 @@ function publicLobbyState(user, lobby) {
     voting: lobby.voting,
     notifications: lobby.notifications.slice(-30),
     summary: computeSummary(lobby),
-    push: { enabled: PUSH_ENABLED, supported: Boolean(webpush) }
+    push: {
+      enabled: PUSH_ENABLED,
+      supported: Boolean(webpush)
+    }
   };
 }
 
@@ -278,7 +283,9 @@ function broadcastLobbyEvent(lobbyId, event) {
   const clients = sseClientsByLobby.get(lobbyId);
   if (!clients || clients.size === 0) return;
   const line = `data: ${JSON.stringify(event)}\n\n`;
-  for (const res of clients) res.write(line);
+  for (const res of clients) {
+    res.write(line);
+  }
 }
 
 async function sendPushToLobby(data, lobby, event) {
@@ -288,22 +295,26 @@ async function sendPushToLobby(data, lobby, event) {
     body: event.message || "",
     type: event.type,
     createdAt: event.createdAt,
-    meta: event.meta || {},
     lobbyId: lobby.id
   });
 
   const keep = [];
   let changed = false;
+
   for (const sub of lobby.pushSubscriptions) {
     try {
       await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
       keep.push(sub);
     } catch (err) {
       const status = Number(err && err.statusCode);
-      if (status !== 404 && status !== 410) keep.push(sub);
-      if (status === 404 || status === 410) changed = true;
+      if (status === 404 || status === 410) {
+        changed = true;
+      } else {
+        keep.push(sub);
+      }
     }
   }
+
   if (changed) {
     lobby.pushSubscriptions = keep;
     writeData(data);
@@ -362,6 +373,14 @@ function checkVotingMilestones() {
 
 function serveStatic(req, res) {
   const filePath = req.url === "/" ? "/index.html" : req.url;
+  if (filePath.includes("..")) {
+    sendJson(res, 400, { error: "Invalid path" });
+    return;
+  }
+}
+
+function serveStatic(req, res) {
+  const filePath = req.url === "/" ? "/index.html" : req.url;
   if (filePath.includes("..")) return sendJson(res, 400, { error: "Invalid path" });
   const abs = path.join(PUBLIC_DIR, filePath);
   if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
@@ -386,7 +405,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/stream") {
       const data = readData();
       const auth = authLobbyUser(req, data, url);
-      if (!auth) return sendJson(res, 401, { error: "Unauthorized stream request." });
+      if (!auth) {
+        sendJson(res, 401, { error: "Unauthorized stream request." });
+        return;
+      }
       const { lobby } = auth;
 
       res.writeHead(200, {
@@ -394,17 +416,22 @@ const server = http.createServer(async (req, res) => {
         "Cache-Control": "no-cache",
         Connection: "keep-alive"
       });
-      res.write(`data: ${JSON.stringify({ type: "stream_ready", message: "connected" })}\n\n`);
+      res.write("data: " + JSON.stringify({ type: "stream_ready", message: "connected" }) + "\n\n");
 
       const set = sseClientsByLobby.get(lobby.id) || new Set();
       set.add(res);
       sseClientsByLobby.set(lobby.id, set);
-      const heartbeat = setInterval(() => res.write(": ping\n\n"), 25000);
+
+      const heartbeat = setInterval(() => {
+        res.write(": ping\n\n");
+      }, 25000);
 
       req.on("close", () => {
         clearInterval(heartbeat);
         set.delete(res);
-        if (!set.size) sseClientsByLobby.delete(lobby.id);
+        if (set.size === 0) {
+          sseClientsByLobby.delete(lobby.id);
+        }
       });
       return;
     }
@@ -452,7 +479,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname.startsWith("/api/admin/")) {
-      if (!authAdmin(req, url)) return sendJson(res, 401, { error: "Unauthorized admin request." });
+      if (!authAdmin(req, url)) {
+        sendJson(res, 401, { error: "Unauthorized admin request." });
+        return;
+      }
       const data = readData();
 
       if (req.method === "GET" && url.pathname === "/api/admin/lobbies") {
@@ -561,7 +591,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/")) {
       const data = readData();
       const auth = authLobbyUser(req, data, url);
-      if (!auth) return sendJson(res, 401, { error: "Unauthorized. Register first." });
+      if (!auth) {
+        sendJson(res, 401, { error: "Unauthorized. Register first." });
+        return;
+      }
       const { lobby, user } = auth;
 
       if (req.method === "GET" && url.pathname === "/api/state") {
@@ -597,6 +630,52 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { ok: true, count: lobby.pushSubscriptions.length });
       }
 
+      if (req.method === "GET" && url.pathname === "/api/push/public-key") {
+        sendJson(res, 200, {
+          enabled: PUSH_ENABLED,
+          publicKey: PUSH_ENABLED ? WEB_PUSH_PUBLIC_KEY : null
+        });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/push/subscribe") {
+        if (!PUSH_ENABLED) {
+          sendJson(res, 400, { error: "Web Push is not configured on server." });
+          return;
+        }
+        const body = await parseBody(req);
+        const subscription = normalizeSubscription(body.subscription || body);
+        if (!subscription) {
+          sendJson(res, 400, { error: "Invalid push subscription payload." });
+          return;
+        }
+        const existingIndex = lobby.pushSubscriptions.findIndex(
+          (x) => x.endpoint === subscription.endpoint
+        );
+        const next = { ...subscription, userId: user.id, createdAt: new Date().toISOString() };
+        if (existingIndex >= 0) {
+          lobby.pushSubscriptions[existingIndex] = next;
+        } else {
+          lobby.pushSubscriptions.push(next);
+        }
+        writeData(data);
+        sendJson(res, 200, { ok: true, count: lobby.pushSubscriptions.length });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") {
+        const body = await parseBody(req);
+        const endpoint = String(body.endpoint || "").trim();
+        if (!endpoint) {
+          sendJson(res, 400, { error: "Endpoint is required." });
+          return;
+        }
+        lobby.pushSubscriptions = lobby.pushSubscriptions.filter((x) => x.endpoint !== endpoint);
+        writeData(data);
+        sendJson(res, 200, { ok: true, count: lobby.pushSubscriptions.length });
+        return;
+      }
+
       if (req.method === "POST" && url.pathname === "/api/places") {
         const body = await parseBody(req);
         const name = String(body.name || "").trim();
@@ -614,7 +693,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && url.pathname === "/api/votes") {
-        if (!isVotingOpen(lobby)) return sendJson(res, 400, { error: "Voting is closed." });
+        if (!isVotingOpen(lobby)) {
+          sendJson(res, 400, { error: "Voting is closed." });
+          return;
+        }
         const body = await parseBody(req);
         const placeId = String(body.placeId || "");
         if (!lobby.places.find((p) => p.id === placeId)) return sendJson(res, 400, { error: "Invalid place." });
@@ -678,7 +760,8 @@ const server = http.createServer(async (req, res) => {
         const minutesRaw = Number(body.durationMinutes);
         const durationMinutes = Number.isFinite(minutesRaw) ? minutesRaw : 30;
         if (durationMinutes <= 0 || durationMinutes > 300) {
-          return sendJson(res, 400, { error: "Duration must be between 1 and 300 minutes." });
+          sendJson(res, 400, { error: "Duration must be between 1 and 300 minutes." });
+          return;
         }
         const startedAt = new Date();
         const endsAt = new Date(startedAt.getTime() + durationMinutes * 60 * 1000);
@@ -692,11 +775,12 @@ const server = http.createServer(async (req, res) => {
         emitNotification(data, lobby, {
           type: "voting_started",
           title: "Voting Started",
-          message: `${user.name} started voting.`,
+          message: `${user.name} started voting. It ends at ${endsAt.toLocaleTimeString()}.`,
           byUserId: user.id,
           meta: { endsAt: endsAt.toISOString() }
         });
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        sendJson(res, 200, publicLobbyState(user, lobby));
+        return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/notify/ordered") {
@@ -708,7 +792,8 @@ const server = http.createServer(async (req, res) => {
           message,
           byUserId: user.id
         });
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        sendJson(res, 200, publicLobbyState(user, lobby));
+        return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/notify/arrived") {
@@ -720,10 +805,12 @@ const server = http.createServer(async (req, res) => {
           message,
           byUserId: user.id
         });
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        sendJson(res, 200, publicLobbyState(user, lobby));
+        return;
       }
 
-      return sendJson(res, 404, { error: "API route not found." });
+      sendJson(res, 404, { error: "API route not found." });
+      return;
     }
 
     serveStatic(req, res);

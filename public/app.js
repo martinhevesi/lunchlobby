@@ -114,8 +114,9 @@ function renderVotingStatus() {
     votingStatus.textContent = "No active voting window.";
     return;
   }
+  const end = new Date(state.voting.endsAt);
   const closed = state.voting.closed ? "Closed" : "Open";
-  votingStatus.textContent = `Voting: ${closed} (ends at ${formatLocalTime(state.voting.endsAt)})`;
+  votingStatus.textContent = `Voting: ${closed} (ends at ${end.toLocaleTimeString()})`;
 }
 
 function renderNotifications() {
@@ -124,12 +125,8 @@ function renderNotifications() {
   const items = (state?.notifications || []).slice().reverse();
   for (const n of items) {
     const li = document.createElement("li");
-    const ts = formatLocalTime(n.createdAt);
-    let message = n.message || "";
-    if (n.type === "voting_started" && n.meta && n.meta.endsAt) {
-      message = `${message} It ends at ${formatLocalTime(n.meta.endsAt)}.`;
-    }
-    li.textContent = `${ts} - ${n.title || n.type}: ${message}`;
+    const ts = new Date(n.createdAt).toLocaleTimeString();
+    li.textContent = `${ts} - ${n.title || n.type}: ${n.message}`;
     list.appendChild(li);
   }
 }
@@ -171,7 +168,11 @@ function setupEventStream() {
 }
 
 function supportsWebPush() {
-  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  return (
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window
+  );
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -210,7 +211,9 @@ async function subscribeToPush(askPermission) {
 
   const publicKey = await getPushPublicKey();
   if (!publicKey) {
-    if (askPermission) alert("Server-side Web Push is not configured yet.");
+    if (askPermission) {
+      alert("Server-side Web Push is not configured yet.");
+    }
     return;
   }
 
