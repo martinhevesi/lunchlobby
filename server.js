@@ -65,16 +65,32 @@ function createEmptyLobby(name, code) {
 }
 
 function normalizeLobby(lobby) {
+  const users = Array.isArray(lobby.users) ? lobby.users : [];
+  const places = Array.isArray(lobby.places) ? lobby.places : [];
+  const userIds = new Set(users.map((u) => u.id));
+  const placeIds = new Set(places.map((p) => p.id));
+  const votesRaw = Array.isArray(lobby.votes) ? lobby.votes : [];
+  const ordersRaw = Array.isArray(lobby.orders) ? lobby.orders : [];
+  const sharedCostsRaw = Array.isArray(lobby.sharedCosts) ? lobby.sharedCosts : [];
+
   return {
     id: lobby.id || uid("lobby"),
     name: lobby.name || "Lobby",
     code: lobby.code || DEFAULT_LOBBY_CODE,
     createdAt: lobby.createdAt || new Date().toISOString(),
-    users: Array.isArray(lobby.users) ? lobby.users : [],
-    places: Array.isArray(lobby.places) ? lobby.places : [],
-    votes: Array.isArray(lobby.votes) ? lobby.votes : [],
-    orders: Array.isArray(lobby.orders) ? lobby.orders : [],
-    sharedCosts: Array.isArray(lobby.sharedCosts) ? lobby.sharedCosts : [],
+    users,
+    places,
+    votes: votesRaw.filter((v) => userIds.has(v.userId) && placeIds.has(v.placeId)),
+    orders: ordersRaw.filter((o) => userIds.has(o.userId) && userIds.has(o.paidByUserId)),
+    sharedCosts: sharedCostsRaw
+      .filter((c) => userIds.has(c.paidByUserId))
+      .map((c) => ({
+        ...c,
+        splitAmong: Array.isArray(c.splitAmong)
+          ? c.splitAmong.filter((id) => userIds.has(id))
+          : []
+      }))
+      .filter((c) => c.splitAmong.length > 0),
     notifications: Array.isArray(lobby.notifications) ? lobby.notifications : [],
     voting: lobby.voting && typeof lobby.voting === "object"
       ? {
@@ -226,7 +242,57 @@ function computeSummary(lobby) {
   return { byUser, placesByVotes };
 }
 
-function publicLobbyState(user, lobby) {
+function computeCrossLobbySuggestions(data, currentUser) {
+  const targetName = String(currentUser?.name || "").trim().toLowerCase();
+  if (!targetName) return { recent: [], favorites: [] };
+
+  const voteEvents = [];
+  const voteCountByPlaceName = new Map();
+
+  for (const lobby of data.lobbies) {
+    const matchedUsers = lobby.users.filter(
+      (u) => String(u.name || "").trim().toLowerCase() === targetName
+    );
+    if (!matchedUsers.length) continue;
+    const matchedIds = new Set(matchedUsers.map((u) => u.id));
+    const placeById = new Map(lobby.places.map((p) => [p.id, p]));
+
+    for (const vote of lobby.votes) {
+      if (!matchedIds.has(vote.userId)) continue;
+      const place = placeById.get(vote.placeId);
+      if (!place) continue;
+      const placeName = String(place.name || "").trim();
+      if (!placeName) continue;
+
+      voteEvents.push({
+        placeName,
+        votedAt: vote.votedAt || vote.createdAt || null
+      });
+      voteCountByPlaceName.set(placeName, (voteCountByPlaceName.get(placeName) || 0) + 1);
+    }
+  }
+
+  const recent = [];
+  const seen = new Set();
+  voteEvents
+    .sort((a, b) => Date.parse(b.votedAt || "") - Date.parse(a.votedAt || ""))
+    .forEach((x) => {
+      if (seen.has(x.placeName)) return;
+      seen.add(x.placeName);
+      recent.push({ name: x.placeName, votedAt: x.votedAt });
+    });
+
+  const favorites = [...voteCountByPlaceName.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  return {
+    recent: recent.slice(0, 6),
+    favorites: favorites.slice(0, 6)
+  };
+}
+
+function publicLobbyState(user, lobby, data) {
   return {
     lobby: { id: lobby.id, name: lobby.name },
     me: user,
@@ -238,6 +304,7 @@ function publicLobbyState(user, lobby) {
     voting: lobby.voting,
     notifications: lobby.notifications.slice(-30),
     summary: computeSummary(lobby),
+    crossLobbySuggestions: computeCrossLobbySuggestions(data, user),
     push: {
       enabled: PUSH_ENABLED,
       supported: Boolean(webpush)
@@ -598,7 +665,7 @@ const server = http.createServer(async (req, res) => {
       const { lobby, user } = auth;
 
       if (req.method === "GET" && url.pathname === "/api/state") {
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
       if (req.method === "GET" && url.pathname === "/api/push/public-key") {
@@ -689,7 +756,7 @@ const server = http.createServer(async (req, res) => {
           });
           writeData(data);
         }
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
       if (req.method === "POST" && url.pathname === "/api/votes") {
@@ -704,10 +771,10 @@ const server = http.createServer(async (req, res) => {
         if (existing) {
           lobby.votes = lobby.votes.filter((v) => !(v.userId === user.id && v.placeId === placeId));
         } else {
-          lobby.votes.push({ userId: user.id, placeId });
+          lobby.votes.push({ userId: user.id, placeId, votedAt: new Date().toISOString() });
         }
         writeData(data);
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
       if (req.method === "POST" && url.pathname === "/api/orders") {
@@ -730,7 +797,7 @@ const server = http.createServer(async (req, res) => {
           createdAt: new Date().toISOString()
         });
         writeData(data);
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
       if (req.method === "POST" && url.pathname === "/api/shared-costs") {
@@ -756,7 +823,7 @@ const server = http.createServer(async (req, res) => {
           createdAt: new Date().toISOString()
         });
         writeData(data);
-        return sendJson(res, 200, publicLobbyState(user, lobby));
+        return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
       if (req.method === "POST" && url.pathname === "/api/voting/start") {
@@ -783,7 +850,7 @@ const server = http.createServer(async (req, res) => {
           byUserId: user.id,
           meta: { endsAt: endsAt.toISOString() }
         });
-        sendJson(res, 200, publicLobbyState(user, lobby));
+        sendJson(res, 200, publicLobbyState(user, lobby, data));
         return;
       }
 
@@ -796,7 +863,7 @@ const server = http.createServer(async (req, res) => {
           message,
           byUserId: user.id
         });
-        sendJson(res, 200, publicLobbyState(user, lobby));
+        sendJson(res, 200, publicLobbyState(user, lobby, data));
         return;
       }
 
@@ -809,7 +876,7 @@ const server = http.createServer(async (req, res) => {
           message,
           byUserId: user.id
         });
-        sendJson(res, 200, publicLobbyState(user, lobby));
+        sendJson(res, 200, publicLobbyState(user, lobby, data));
         return;
       }
 

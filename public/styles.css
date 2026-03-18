@@ -76,6 +76,29 @@ h2 {
   margin-bottom: 12px;
 }
 
+.suggestions {
+  margin-bottom: 10px;
+}
+
+.suggestions-title {
+  margin: 4px 0 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.suggestion-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.suggestion-btn {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  border-radius: 999px;
+}
+
 .mode-switch button {
   flex: 1;
 }
