@@ -222,6 +222,10 @@ function notifyBrowser(title, message) {
 
 function handleIncomingNotification(event) {
   if (!event || !event.type || event.type === "stream_ready") return;
+  if (event.type === "state_changed") {
+    syncLobbyState().catch(() => {});
+    return;
+  }
   if (!state) return;
   state.notifications = [...(state.notifications || []), event].slice(-30);
   renderNotifications();
@@ -507,10 +511,14 @@ async function refreshLobbies() {
   renderLobbySelect();
 }
 
-async function refreshUserState() {
+async function syncLobbyState() {
   state = await api("/api/state", "GET", null, userToken);
   setUserLoggedIn(true);
   renderUserState();
+}
+
+async function refreshUserState() {
+  await syncLobbyState();
   setupEventStream();
   subscribeToPush(false).catch(() => {});
 }

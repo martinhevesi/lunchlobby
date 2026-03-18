@@ -226,10 +226,45 @@
           "id": "user_732854218d",
           "name": "Martin",
           "createdAt": "2026-03-18T20:09:54.887Z"
+        },
+        {
+          "id": "user_e9deb3d6bd",
+          "name": "Laci",
+          "createdAt": "2026-03-18T20:22:47.749Z"
         }
       ],
-      "places": [],
-      "votes": [],
+      "places": [
+        {
+          "id": "place_d87a1192a6",
+          "name": "Trója",
+          "createdByUserId": "user_e9deb3d6bd",
+          "createdAt": "2026-03-18T20:22:56.482Z"
+        },
+        {
+          "id": "place_ccab739749",
+          "name": "Plebs",
+          "createdByUserId": "user_732854218d",
+          "createdAt": "2026-03-18T20:23:01.329Z"
+        },
+        {
+          "id": "place_6f6858a1c2",
+          "name": "Burger King",
+          "createdByUserId": "user_732854218d",
+          "createdAt": "2026-03-18T20:23:02.763Z"
+        }
+      ],
+      "votes": [
+        {
+          "userId": "user_732854218d",
+          "placeId": "place_ccab739749",
+          "votedAt": "2026-03-18T20:23:01.339Z"
+        },
+        {
+          "userId": "user_732854218d",
+          "placeId": "place_6f6858a1c2",
+          "votedAt": "2026-03-18T20:23:02.773Z"
+        }
+      ],
       "orders": [],
       "sharedCosts": [],
       "notifications": [],
