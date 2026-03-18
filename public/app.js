@@ -238,13 +238,15 @@ function renderUserState() {
 
   const placesList = document.getElementById("placesList");
   placesList.innerHTML = "";
-  const myVote = state.votes.find((v) => v.userId === state.me.id);
+  const myVotes = new Set(
+    state.votes.filter((v) => v.userId === state.me.id).map((v) => v.placeId)
+  );
   for (const place of state.summary.placesByVotes) {
     const li = document.createElement("li");
     li.textContent = `${place.name} (${place.voteCount} vote${place.voteCount === 1 ? "" : "s"}) `;
     const btn = document.createElement("button");
-    btn.textContent = myVote?.placeId === place.id ? "Voted" : "Vote";
-    btn.disabled = myVote?.placeId === place.id || Boolean(state.voting?.closed);
+    btn.textContent = myVotes.has(place.id) ? "Unvote" : "Vote";
+    btn.disabled = Boolean(state.voting?.closed);
     btn.onclick = async () => {
       try {
         state = await api("/api/votes", "POST", { placeId: place.id }, userToken);

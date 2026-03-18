@@ -700,8 +700,12 @@ const server = http.createServer(async (req, res) => {
         const body = await parseBody(req);
         const placeId = String(body.placeId || "");
         if (!lobby.places.find((p) => p.id === placeId)) return sendJson(res, 400, { error: "Invalid place." });
-        lobby.votes = lobby.votes.filter((v) => v.userId !== user.id);
-        lobby.votes.push({ userId: user.id, placeId });
+        const existing = lobby.votes.find((v) => v.userId === user.id && v.placeId === placeId);
+        if (existing) {
+          lobby.votes = lobby.votes.filter((v) => !(v.userId === user.id && v.placeId === placeId));
+        } else {
+          lobby.votes.push({ userId: user.id, placeId });
+        }
         writeData(data);
         return sendJson(res, 200, publicLobbyState(user, lobby));
       }
@@ -775,7 +779,7 @@ const server = http.createServer(async (req, res) => {
         emitNotification(data, lobby, {
           type: "voting_started",
           title: "Voting Started",
-          message: `${user.name} started voting. It ends at ${endsAt.toLocaleTimeString()}.`,
+          message: `${user.name} started voting.`,
           byUserId: user.id,
           meta: { endsAt: endsAt.toISOString() }
         });
