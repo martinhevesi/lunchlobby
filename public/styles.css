@@ -72,6 +72,10 @@ h2 {
   margin-bottom: 14px;
 }
 
+.top-actions {
+  margin-bottom: 12px;
+}
+
 .mode-switch button {
   flex: 1;
 }

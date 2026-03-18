@@ -9,7 +9,10 @@
       "places": [],
       "votes": [],
       "orders": [],
-      "sharedCosts": []
+      "sharedCosts": [],
+      "notifications": [],
+      "voting": null,
+      "pushSubscriptions": []
     },
     {
       "id": "lobby_5c2c6b1364",
@@ -46,6 +49,11 @@
           "id": "user_739d50fe7e",
           "name": "Norbi",
           "createdAt": "2026-03-12T21:41:05.808Z"
+        },
+        {
+          "id": "user_1fa51fa232",
+          "name": "Laca",
+          "createdAt": "2026-03-18T18:38:20.104Z"
         }
       ],
       "places": [],
@@ -79,7 +87,10 @@
           "createdAt": "2026-03-12T21:41:31.924Z"
         }
       ],
-      "sharedCosts": []
+      "sharedCosts": [],
+      "notifications": [],
+      "voting": null,
+      "pushSubscriptions": []
     }
   ]
 }
