@@ -151,7 +151,12 @@ function readData() {
 }
 
 function sendJson(res, status, payload) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0"
+  });
   res.end(JSON.stringify(payload));
 }
 
@@ -470,7 +475,12 @@ function serveStatic(req, res) {
     ".json": "application/json; charset=utf-8",
     ".webmanifest": "application/manifest+json; charset=utf-8"
   };
-  res.writeHead(200, { "Content-Type": map[ext] || "text/plain; charset=utf-8" });
+  res.writeHead(200, {
+    "Content-Type": map[ext] || "text/plain; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0"
+  });
   fs.createReadStream(abs).pipe(res);
 }
 
