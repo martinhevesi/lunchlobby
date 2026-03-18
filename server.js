@@ -355,6 +355,14 @@ function broadcastLobbyEvent(lobbyId, event) {
   }
 }
 
+function emitStateChanged(lobby, reason) {
+  broadcastLobbyEvent(lobby.id, {
+    type: "state_changed",
+    reason,
+    updatedAt: new Date().toISOString()
+  });
+}
+
 async function sendPushToLobby(data, lobby, event) {
   if (!PUSH_ENABLED || !lobby.pushSubscriptions.length) return;
   const payload = JSON.stringify({
@@ -392,6 +400,7 @@ function emitNotification(data, lobby, event) {
   const notification = addNotification(lobby, event);
   writeData(data);
   broadcastLobbyEvent(lobby.id, notification);
+  emitStateChanged(lobby, "notification");
   sendPushToLobby(data, lobby, notification).catch(() => {});
   return notification;
 }
@@ -529,6 +538,7 @@ const server = http.createServer(async (req, res) => {
         user = { id: uid("user"), name, createdAt: new Date().toISOString() };
         lobby.users.push(user);
         writeData(data);
+        emitStateChanged(lobby, "user_registered");
       }
 
       const token = crypto.randomBytes(16).toString("hex");
@@ -598,6 +608,7 @@ const server = http.createServer(async (req, res) => {
         if (!lobby.users.find((u) => u.name.toLowerCase() === name.toLowerCase())) {
           lobby.users.push({ id: uid("user"), name, createdAt: new Date().toISOString() });
           writeData(data);
+          emitStateChanged(lobby, "admin_user_added");
         }
         return sendJson(res, 200, adminLobbyState(lobby));
       }
@@ -616,6 +627,7 @@ const server = http.createServer(async (req, res) => {
           .filter((c) => c.splitAmong.length > 0);
         lobby.pushSubscriptions = lobby.pushSubscriptions.filter((s) => s.userId !== userId);
         writeData(data);
+        emitStateChanged(lobby, "admin_user_removed");
         return sendJson(res, 200, adminLobbyState(lobby));
       }
 
@@ -627,6 +639,7 @@ const server = http.createServer(async (req, res) => {
         lobby.places = lobby.places.filter((p) => p.id !== placeId);
         lobby.votes = lobby.votes.filter((v) => v.placeId !== placeId);
         writeData(data);
+        emitStateChanged(lobby, "admin_place_removed");
         return sendJson(res, 200, adminLobbyState(lobby));
       }
 
@@ -637,6 +650,7 @@ const server = http.createServer(async (req, res) => {
         const orderId = decodeURIComponent(deleteOrderMatch[2]);
         lobby.orders = lobby.orders.filter((o) => o.id !== orderId);
         writeData(data);
+        emitStateChanged(lobby, "admin_order_removed");
         return sendJson(res, 200, adminLobbyState(lobby));
       }
 
@@ -649,6 +663,7 @@ const server = http.createServer(async (req, res) => {
         const sharedId = decodeURIComponent(deleteSharedMatch[2]);
         lobby.sharedCosts = lobby.sharedCosts.filter((c) => c.id !== sharedId);
         writeData(data);
+        emitStateChanged(lobby, "admin_shared_cost_removed");
         return sendJson(res, 200, adminLobbyState(lobby));
       }
 
@@ -755,6 +770,7 @@ const server = http.createServer(async (req, res) => {
             createdAt: new Date().toISOString()
           });
           writeData(data);
+          emitStateChanged(lobby, "place_added");
         }
         return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
@@ -774,6 +790,7 @@ const server = http.createServer(async (req, res) => {
           lobby.votes.push({ userId: user.id, placeId, votedAt: new Date().toISOString() });
         }
         writeData(data);
+        emitStateChanged(lobby, "vote_changed");
         return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
@@ -797,6 +814,7 @@ const server = http.createServer(async (req, res) => {
           createdAt: new Date().toISOString()
         });
         writeData(data);
+        emitStateChanged(lobby, "order_added");
         return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
@@ -823,6 +841,7 @@ const server = http.createServer(async (req, res) => {
           createdAt: new Date().toISOString()
         });
         writeData(data);
+        emitStateChanged(lobby, "shared_cost_added");
         return sendJson(res, 200, publicLobbyState(user, lobby, data));
       }
 
