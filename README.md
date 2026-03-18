@@ -4,21 +4,26 @@ Lightweight webapp to:
 
 - register users by name + lobby secret code
 - support multiple lobbies
-- vote where to eat/order
+- vote where to eat/order (multi-vote per user)
 - enter food orders with payer tracking
 - add shared costs (example: delivery fee) split across selected users
 - see live net balances (`owes` vs `should receive`)
+- suggest places from your cross-lobby history:
+  - recently voted places
+  - favourite places
 - admin panel for lobby creation and moderation (add/remove users, remove places/orders/shared costs)
 - real-time lobby notifications:
   - voting started
   - voting ending soon (automatic)
   - food ordered
   - food arrived
+- real-time lobby state sync via SSE (no manual refresh needed)
 - Web Push support for installed/permission-granted browsers (Android + iOS PWA)
 
 ## Run
 
 ```powershell
+npm install
 npm start
 ```
 
@@ -46,6 +51,13 @@ Open: `http://localhost:3000`
 - Real-time delivery uses:
   - SSE while the page is open
   - Web Push for background notifications (if browser supports it)
+- Times are shown in local 24-hour format (no AM/PM).
+
+## Lobby UX
+
+- Use `Back To Home / Switch Lobby` in user mode to leave the current lobby and join another one.
+- Vote buttons are `Vote` / `Unvote`, so each user can keep multiple votes at once.
+- Suggestions are cross-lobby and one-click actionable in the current lobby.
 
 ## Web Push Setup
 
@@ -104,6 +116,7 @@ Open: `http://localhost:3000`
 Notes:
 
 - App data is stored in `/app/data/store.json` inside the container.
+- HTTP responses are served with no-cache headers to reduce stale client assets.
 - For persistent data on a server, mount a volume:
 
 ```powershell
