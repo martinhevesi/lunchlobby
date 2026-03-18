@@ -56,8 +56,30 @@
           "createdAt": "2026-03-18T18:38:20.104Z"
         }
       ],
-      "places": [],
-      "votes": [],
+      "places": [
+        {
+          "id": "place_fe4fd389b2",
+          "name": "Trója",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-18T18:56:43.795Z"
+        },
+        {
+          "id": "place_800fa2aa57",
+          "name": "DunaDöner",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-18T18:56:46.834Z"
+        }
+      ],
+      "votes": [
+        {
+          "userId": "user_5e43333b12",
+          "placeId": "place_800fa2aa57"
+        },
+        {
+          "userId": "user_5e43333b12",
+          "placeId": "place_fe4fd389b2"
+        }
+      ],
       "orders": [
         {
           "id": "order_6ce8913efd",
