@@ -144,15 +144,10 @@ function parseBody(req) {
     let raw = "";
     req.on("data", (chunk) => {
       raw += chunk.toString();
-      if (raw.length > 1_000_000) {
-        reject(new Error("Payload too large"));
-      }
+      if (raw.length > 1_000_000) reject(new Error("Payload too large"));
     });
     req.on("end", () => {
-      if (!raw) {
-        resolve({});
-        return;
-      }
+      if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
       } catch {
@@ -190,9 +185,7 @@ function authAdmin(req, url) {
 
 function computeSummary(lobby) {
   const balances = new Map();
-  for (const user of lobby.users) {
-    balances.set(user.id, 0);
-  }
+  for (const user of lobby.users) balances.set(user.id, 0);
 
   for (const order of lobby.orders) {
     const amount = Number(order.price || 0);
@@ -211,7 +204,6 @@ function computeSummary(lobby) {
     const splitAmong = Array.isArray(cost.splitAmong) ? cost.splitAmong : [];
     const unique = [...new Set(splitAmong)].filter((id) => balances.has(id));
     if (!unique.length) continue;
-
     const share = amount / unique.length;
     if (balances.has(cost.paidByUserId)) {
       balances.set(cost.paidByUserId, balances.get(cost.paidByUserId) + amount);
@@ -228,10 +220,7 @@ function computeSummary(lobby) {
   }));
 
   const placesByVotes = lobby.places
-    .map((p) => ({
-      ...p,
-      voteCount: lobby.votes.filter((v) => v.placeId === p.id).length
-    }))
+    .map((p) => ({ ...p, voteCount: lobby.votes.filter((v) => v.placeId === p.id).length }))
     .sort((a, b) => b.voteCount - a.voteCount || a.name.localeCompare(b.name));
 
   return { byUser, placesByVotes };
@@ -388,13 +377,15 @@ function serveStatic(req, res) {
     sendJson(res, 400, { error: "Invalid path" });
     return;
   }
+}
 
+function serveStatic(req, res) {
+  const filePath = req.url === "/" ? "/index.html" : req.url;
+  if (filePath.includes("..")) return sendJson(res, 400, { error: "Invalid path" });
   const abs = path.join(PUBLIC_DIR, filePath);
   if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) {
-    sendJson(res, 404, { error: "Not found" });
-    return;
+    return sendJson(res, 404, { error: "Not found" });
   }
-
   const ext = path.extname(abs).toLowerCase();
   const map = {
     ".html": "text/html; charset=utf-8",
@@ -447,12 +438,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/api/lobbies") {
       const data = readData();
-      sendJson(
+      return sendJson(
         res,
         200,
         data.lobbies.map((x) => ({ id: x.id, name: x.name }))
       );
-      return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/register") {
@@ -463,18 +453,9 @@ const server = http.createServer(async (req, res) => {
       const lobbyId = String(body.lobbyId || "").trim();
       const lobby = data.lobbies.find((x) => x.id === lobbyId);
 
-      if (!name) {
-        sendJson(res, 400, { error: "Name is required." });
-        return;
-      }
-      if (!lobby) {
-        sendJson(res, 400, { error: "Please select a valid lobby." });
-        return;
-      }
-      if (code !== lobby.code) {
-        sendJson(res, 403, { error: "Invalid lobby code." });
-        return;
-      }
+      if (!name) return sendJson(res, 400, { error: "Name is required." });
+      if (!lobby) return sendJson(res, 400, { error: "Please select a valid lobby." });
+      if (code !== lobby.code) return sendJson(res, 403, { error: "Invalid lobby code." });
 
       let user = lobby.users.find((u) => u.name.toLowerCase() === name.toLowerCase());
       if (!user) {
@@ -485,21 +466,16 @@ const server = http.createServer(async (req, res) => {
 
       const token = crypto.randomBytes(16).toString("hex");
       sessions.set(token, { type: "user", lobbyId: lobby.id, userId: user.id });
-      sendJson(res, 200, { token, user, lobby: { id: lobby.id, name: lobby.name } });
-      return;
+      return sendJson(res, 200, { token, user, lobby: { id: lobby.id, name: lobby.name } });
     }
 
     if (req.method === "POST" && url.pathname === "/api/admin/login") {
       const body = await parseBody(req);
       const code = String(body.code || "").trim();
-      if (code !== ADMIN_CODE) {
-        sendJson(res, 403, { error: "Invalid admin code." });
-        return;
-      }
+      if (code !== ADMIN_CODE) return sendJson(res, 403, { error: "Invalid admin code." });
       const token = crypto.randomBytes(16).toString("hex");
       sessions.set(token, { type: "admin", createdAt: Date.now() });
-      sendJson(res, 200, { token });
-      return;
+      return sendJson(res, 200, { token });
     }
 
     if (url.pathname.startsWith("/api/admin/")) {
@@ -510,7 +486,7 @@ const server = http.createServer(async (req, res) => {
       const data = readData();
 
       if (req.method === "GET" && url.pathname === "/api/admin/lobbies") {
-        sendJson(
+        return sendJson(
           res,
           200,
           data.lobbies.map((lobby) => ({
@@ -524,71 +500,46 @@ const server = http.createServer(async (req, res) => {
             pushSubscriptions: lobby.pushSubscriptions.length
           }))
         );
-        return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/admin/lobbies") {
         const body = await parseBody(req);
         const name = String(body.name || "").trim();
         const code = String(body.code || "").trim();
-        if (!name) {
-          sendJson(res, 400, { error: "Lobby name is required." });
-          return;
-        }
-        if (!code) {
-          sendJson(res, 400, { error: "Lobby code is required." });
-          return;
-        }
+        if (!name) return sendJson(res, 400, { error: "Lobby name is required." });
+        if (!code) return sendJson(res, 400, { error: "Lobby code is required." });
         const newLobby = createEmptyLobby(name, code);
         data.lobbies.push(newLobby);
         writeData(data);
-        sendJson(res, 200, adminLobbyState(newLobby));
-        return;
+        return sendJson(res, 200, adminLobbyState(newLobby));
       }
 
       const viewMatch = url.pathname.match(/^\/api\/admin\/lobbies\/([^/]+)$/);
       if (req.method === "GET" && viewMatch) {
-        const lobbyId = decodeURIComponent(viewMatch[1]);
-        const lobby = data.lobbies.find((x) => x.id === lobbyId);
-        if (!lobby) {
-          sendJson(res, 404, { error: "Lobby not found." });
-          return;
-        }
-        sendJson(res, 200, adminLobbyState(lobby));
-        return;
+        const lobby = data.lobbies.find((x) => x.id === decodeURIComponent(viewMatch[1]));
+        if (!lobby) return sendJson(res, 404, { error: "Lobby not found." });
+        return sendJson(res, 200, adminLobbyState(lobby));
       }
 
       const addUserMatch = url.pathname.match(/^\/api\/admin\/lobbies\/([^/]+)\/users$/);
       if (req.method === "POST" && addUserMatch) {
-        const lobbyId = decodeURIComponent(addUserMatch[1]);
-        const lobby = data.lobbies.find((x) => x.id === lobbyId);
-        if (!lobby) {
-          sendJson(res, 404, { error: "Lobby not found." });
-          return;
-        }
+        const lobby = data.lobbies.find((x) => x.id === decodeURIComponent(addUserMatch[1]));
+        if (!lobby) return sendJson(res, 404, { error: "Lobby not found." });
         const body = await parseBody(req);
         const name = String(body.name || "").trim();
-        if (!name) {
-          sendJson(res, 400, { error: "User name is required." });
-          return;
-        }
+        if (!name) return sendJson(res, 400, { error: "User name is required." });
         if (!lobby.users.find((u) => u.name.toLowerCase() === name.toLowerCase())) {
           lobby.users.push({ id: uid("user"), name, createdAt: new Date().toISOString() });
           writeData(data);
         }
-        sendJson(res, 200, adminLobbyState(lobby));
-        return;
+        return sendJson(res, 200, adminLobbyState(lobby));
       }
 
       const deleteUserMatch = url.pathname.match(/^\/api\/admin\/lobbies\/([^/]+)\/users\/([^/]+)$/);
       if (req.method === "DELETE" && deleteUserMatch) {
-        const lobbyId = decodeURIComponent(deleteUserMatch[1]);
+        const lobby = data.lobbies.find((x) => x.id === decodeURIComponent(deleteUserMatch[1]));
+        if (!lobby) return sendJson(res, 404, { error: "Lobby not found." });
         const userId = decodeURIComponent(deleteUserMatch[2]);
-        const lobby = data.lobbies.find((x) => x.id === lobbyId);
-        if (!lobby) {
-          sendJson(res, 404, { error: "Lobby not found." });
-          return;
-        }
         lobby.users = lobby.users.filter((u) => u.id !== userId);
         lobby.votes = lobby.votes.filter((v) => v.userId !== userId);
         lobby.orders = lobby.orders.filter((o) => o.userId !== userId && o.paidByUserId !== userId);
@@ -598,60 +549,43 @@ const server = http.createServer(async (req, res) => {
           .filter((c) => c.splitAmong.length > 0);
         lobby.pushSubscriptions = lobby.pushSubscriptions.filter((s) => s.userId !== userId);
         writeData(data);
-        sendJson(res, 200, adminLobbyState(lobby));
-        return;
+        return sendJson(res, 200, adminLobbyState(lobby));
       }
 
       const deletePlaceMatch = url.pathname.match(/^\/api\/admin\/lobbies\/([^/]+)\/places\/([^/]+)$/);
       if (req.method === "DELETE" && deletePlaceMatch) {
-        const lobbyId = decodeURIComponent(deletePlaceMatch[1]);
+        const lobby = data.lobbies.find((x) => x.id === decodeURIComponent(deletePlaceMatch[1]));
+        if (!lobby) return sendJson(res, 404, { error: "Lobby not found." });
         const placeId = decodeURIComponent(deletePlaceMatch[2]);
-        const lobby = data.lobbies.find((x) => x.id === lobbyId);
-        if (!lobby) {
-          sendJson(res, 404, { error: "Lobby not found." });
-          return;
-        }
         lobby.places = lobby.places.filter((p) => p.id !== placeId);
         lobby.votes = lobby.votes.filter((v) => v.placeId !== placeId);
         writeData(data);
-        sendJson(res, 200, adminLobbyState(lobby));
-        return;
+        return sendJson(res, 200, adminLobbyState(lobby));
       }
 
       const deleteOrderMatch = url.pathname.match(/^\/api\/admin\/lobbies\/([^/]+)\/orders\/([^/]+)$/);
       if (req.method === "DELETE" && deleteOrderMatch) {
-        const lobbyId = decodeURIComponent(deleteOrderMatch[1]);
+        const lobby = data.lobbies.find((x) => x.id === decodeURIComponent(deleteOrderMatch[1]));
+        if (!lobby) return sendJson(res, 404, { error: "Lobby not found." });
         const orderId = decodeURIComponent(deleteOrderMatch[2]);
-        const lobby = data.lobbies.find((x) => x.id === lobbyId);
-        if (!lobby) {
-          sendJson(res, 404, { error: "Lobby not found." });
-          return;
-        }
         lobby.orders = lobby.orders.filter((o) => o.id !== orderId);
         writeData(data);
-        sendJson(res, 200, adminLobbyState(lobby));
-        return;
+        return sendJson(res, 200, adminLobbyState(lobby));
       }
 
       const deleteSharedMatch = url.pathname.match(
         /^\/api\/admin\/lobbies\/([^/]+)\/shared-costs\/([^/]+)$/
       );
       if (req.method === "DELETE" && deleteSharedMatch) {
-        const lobbyId = decodeURIComponent(deleteSharedMatch[1]);
+        const lobby = data.lobbies.find((x) => x.id === decodeURIComponent(deleteSharedMatch[1]));
+        if (!lobby) return sendJson(res, 404, { error: "Lobby not found." });
         const sharedId = decodeURIComponent(deleteSharedMatch[2]);
-        const lobby = data.lobbies.find((x) => x.id === lobbyId);
-        if (!lobby) {
-          sendJson(res, 404, { error: "Lobby not found." });
-          return;
-        }
         lobby.sharedCosts = lobby.sharedCosts.filter((c) => c.id !== sharedId);
         writeData(data);
-        sendJson(res, 200, adminLobbyState(lobby));
-        return;
+        return sendJson(res, 200, adminLobbyState(lobby));
       }
 
-      sendJson(res, 404, { error: "Admin API route not found." });
-      return;
+      return sendJson(res, 404, { error: "Admin API route not found." });
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -664,8 +598,36 @@ const server = http.createServer(async (req, res) => {
       const { lobby, user } = auth;
 
       if (req.method === "GET" && url.pathname === "/api/state") {
-        sendJson(res, 200, publicLobbyState(user, lobby));
-        return;
+        return sendJson(res, 200, publicLobbyState(user, lobby));
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/push/public-key") {
+        return sendJson(res, 200, {
+          enabled: PUSH_ENABLED,
+          publicKey: PUSH_ENABLED ? WEB_PUSH_PUBLIC_KEY : null
+        });
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/push/subscribe") {
+        if (!PUSH_ENABLED) return sendJson(res, 400, { error: "Web Push is not configured on server." });
+        const body = await parseBody(req);
+        const subscription = normalizeSubscription(body.subscription || body);
+        if (!subscription) return sendJson(res, 400, { error: "Invalid push subscription payload." });
+        const existingIndex = lobby.pushSubscriptions.findIndex((x) => x.endpoint === subscription.endpoint);
+        const next = { ...subscription, userId: user.id, createdAt: new Date().toISOString() };
+        if (existingIndex >= 0) lobby.pushSubscriptions[existingIndex] = next;
+        else lobby.pushSubscriptions.push(next);
+        writeData(data);
+        return sendJson(res, 200, { ok: true, count: lobby.pushSubscriptions.length });
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") {
+        const body = await parseBody(req);
+        const endpoint = String(body.endpoint || "").trim();
+        if (!endpoint) return sendJson(res, 400, { error: "Endpoint is required." });
+        lobby.pushSubscriptions = lobby.pushSubscriptions.filter((x) => x.endpoint !== endpoint);
+        writeData(data);
+        return sendJson(res, 200, { ok: true, count: lobby.pushSubscriptions.length });
       }
 
       if (req.method === "GET" && url.pathname === "/api/push/public-key") {
@@ -717,10 +679,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "POST" && url.pathname === "/api/places") {
         const body = await parseBody(req);
         const name = String(body.name || "").trim();
-        if (!name) {
-          sendJson(res, 400, { error: "Place name is required." });
-          return;
-        }
+        if (!name) return sendJson(res, 400, { error: "Place name is required." });
         if (!lobby.places.find((p) => p.name.toLowerCase() === name.toLowerCase())) {
           lobby.places.push({
             id: uid("place"),
@@ -730,8 +689,7 @@ const server = http.createServer(async (req, res) => {
           });
           writeData(data);
         }
-        sendJson(res, 200, publicLobbyState(user, lobby));
-        return;
+        return sendJson(res, 200, publicLobbyState(user, lobby));
       }
 
       if (req.method === "POST" && url.pathname === "/api/votes") {
@@ -741,15 +699,11 @@ const server = http.createServer(async (req, res) => {
         }
         const body = await parseBody(req);
         const placeId = String(body.placeId || "");
-        if (!lobby.places.find((p) => p.id === placeId)) {
-          sendJson(res, 400, { error: "Invalid place." });
-          return;
-        }
+        if (!lobby.places.find((p) => p.id === placeId)) return sendJson(res, 400, { error: "Invalid place." });
         lobby.votes = lobby.votes.filter((v) => v.userId !== user.id);
         lobby.votes.push({ userId: user.id, placeId });
         writeData(data);
-        sendJson(res, 200, publicLobbyState(user, lobby));
-        return;
+        return sendJson(res, 200, publicLobbyState(user, lobby));
       }
 
       if (req.method === "POST" && url.pathname === "/api/orders") {
@@ -758,24 +712,10 @@ const server = http.createServer(async (req, res) => {
         const price = Number(body.price);
         const consumerUserId = String(body.userId || "");
         const paidByUserId = String(body.paidByUserId || "");
-
-        if (!item) {
-          sendJson(res, 400, { error: "Food item is required." });
-          return;
-        }
-        if (!Number.isFinite(price) || price < 0) {
-          sendJson(res, 400, { error: "Price must be a non-negative number." });
-          return;
-        }
-        if (!lobby.users.find((u) => u.id === consumerUserId)) {
-          sendJson(res, 400, { error: "Invalid consumer." });
-          return;
-        }
-        if (!lobby.users.find((u) => u.id === paidByUserId)) {
-          sendJson(res, 400, { error: "Invalid payer." });
-          return;
-        }
-
+        if (!item) return sendJson(res, 400, { error: "Food item is required." });
+        if (!Number.isFinite(price) || price < 0) return sendJson(res, 400, { error: "Price must be a non-negative number." });
+        if (!lobby.users.find((u) => u.id === consumerUserId)) return sendJson(res, 400, { error: "Invalid consumer." });
+        if (!lobby.users.find((u) => u.id === paidByUserId)) return sendJson(res, 400, { error: "Invalid payer." });
         lobby.orders.push({
           id: uid("order"),
           item,
@@ -786,8 +726,7 @@ const server = http.createServer(async (req, res) => {
           createdAt: new Date().toISOString()
         });
         writeData(data);
-        sendJson(res, 200, publicLobbyState(user, lobby));
-        return;
+        return sendJson(res, 200, publicLobbyState(user, lobby));
       }
 
       if (req.method === "POST" && url.pathname === "/api/shared-costs") {
@@ -795,33 +734,14 @@ const server = http.createServer(async (req, res) => {
         const description = String(body.description || "").trim();
         const amount = Number(body.amount);
         const paidByUserId = String(body.paidByUserId || "");
-        const splitAmong = Array.isArray(body.splitAmong)
-          ? body.splitAmong.map((x) => String(x))
-          : [];
-
-        if (!description) {
-          sendJson(res, 400, { error: "Description is required." });
-          return;
-        }
-        if (!Number.isFinite(amount) || amount < 0) {
-          sendJson(res, 400, { error: "Amount must be a non-negative number." });
-          return;
-        }
-        if (!lobby.users.find((u) => u.id === paidByUserId)) {
-          sendJson(res, 400, { error: "Invalid payer." });
-          return;
-        }
-        if (!splitAmong.length) {
-          sendJson(res, 400, { error: "Choose at least one user to split with." });
-          return;
-        }
+        const splitAmong = Array.isArray(body.splitAmong) ? body.splitAmong.map((x) => String(x)) : [];
+        if (!description) return sendJson(res, 400, { error: "Description is required." });
+        if (!Number.isFinite(amount) || amount < 0) return sendJson(res, 400, { error: "Amount must be a non-negative number." });
+        if (!lobby.users.find((u) => u.id === paidByUserId)) return sendJson(res, 400, { error: "Invalid payer." });
+        if (!splitAmong.length) return sendJson(res, 400, { error: "Choose at least one user to split with." });
         for (const userId of splitAmong) {
-          if (!lobby.users.find((u) => u.id === userId)) {
-            sendJson(res, 400, { error: "Split includes invalid user." });
-            return;
-          }
+          if (!lobby.users.find((u) => u.id === userId)) return sendJson(res, 400, { error: "Split includes invalid user." });
         }
-
         lobby.sharedCosts.push({
           id: uid("shared"),
           description,
@@ -832,8 +752,7 @@ const server = http.createServer(async (req, res) => {
           createdAt: new Date().toISOString()
         });
         writeData(data);
-        sendJson(res, 200, publicLobbyState(user, lobby));
-        return;
+        return sendJson(res, 200, publicLobbyState(user, lobby));
       }
 
       if (req.method === "POST" && url.pathname === "/api/voting/start") {

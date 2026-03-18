@@ -35,6 +35,16 @@ const adminAddUserForm = document.getElementById("adminAddUserForm");
 document.getElementById("userModeBtn").onclick = () => switchMode("user");
 document.getElementById("adminModeBtn").onclick = () => switchMode("admin");
 
+function formatLocalTime(dateInput) {
+  const date = new Date(dateInput);
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
 async function api(path, method = "GET", body, token) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers["x-session-token"] = token;
@@ -450,6 +460,15 @@ registerForm.addEventListener("submit", async (e) => {
   } catch (err) {
     alert(err.message);
   }
+});
+
+document.getElementById("switchLobbyBtn").addEventListener("click", async () => {
+  userToken = null;
+  state = null;
+  pushKeyCache = null;
+  localStorage.removeItem(userTokenKey);
+  setUserLoggedIn(false);
+  await refreshLobbies();
 });
 
 document.getElementById("placeForm").addEventListener("submit", async (e) => {
