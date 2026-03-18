@@ -68,16 +68,57 @@
           "name": "DunaDöner",
           "createdByUserId": "user_5e43333b12",
           "createdAt": "2026-03-18T18:56:46.834Z"
+        },
+        {
+          "id": "place_21907a8b1f",
+          "name": "Plebs",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-18T19:23:56.290Z"
+        },
+        {
+          "id": "place_9ea848adbd",
+          "name": "Pivo",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-18T20:10:45.247Z"
+        },
+        {
+          "id": "place_b23d905a3e",
+          "name": "HappyHot",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-18T20:10:59.194Z"
+        },
+        {
+          "id": "place_1c58f34ff6",
+          "name": "Humusbar",
+          "createdByUserId": "user_5e43333b12",
+          "createdAt": "2026-03-18T20:11:04.100Z"
         }
       ],
       "votes": [
         {
           "userId": "user_5e43333b12",
-          "placeId": "place_800fa2aa57"
+          "placeId": "place_21907a8b1f",
+          "votedAt": "2026-03-18T19:23:59.343Z"
         },
         {
           "userId": "user_5e43333b12",
-          "placeId": "place_fe4fd389b2"
+          "placeId": "place_fe4fd389b2",
+          "votedAt": "2026-03-18T19:24:01.141Z"
+        },
+        {
+          "userId": "user_5e43333b12",
+          "placeId": "place_800fa2aa57",
+          "votedAt": "2026-03-18T19:24:05.805Z"
+        },
+        {
+          "userId": "user_5e43333b12",
+          "placeId": "place_9ea848adbd",
+          "votedAt": "2026-03-18T20:10:49.351Z"
+        },
+        {
+          "userId": "user_5e43333b12",
+          "placeId": "place_1c58f34ff6",
+          "votedAt": "2026-03-18T20:11:05.387Z"
         }
       ],
       "orders": [
@@ -109,6 +150,87 @@
           "createdAt": "2026-03-12T21:41:31.924Z"
         }
       ],
+      "sharedCosts": [],
+      "notifications": [],
+      "voting": null,
+      "pushSubscriptions": []
+    },
+    {
+      "id": "lobby_748b305c4a",
+      "name": "2026.03.18. Szerda",
+      "code": "260318",
+      "createdAt": "2026-03-18T19:22:19.441Z",
+      "users": [
+        {
+          "id": "user_f98596d8d3",
+          "name": "Martin",
+          "createdAt": "2026-03-18T19:22:47.630Z"
+        }
+      ],
+      "places": [
+        {
+          "id": "place_091c4b83d5",
+          "name": "Trója",
+          "createdByUserId": "user_f98596d8d3",
+          "createdAt": "2026-03-18T19:24:23.968Z"
+        },
+        {
+          "id": "place_3526a3446a",
+          "name": "Plebs",
+          "createdByUserId": "user_f98596d8d3",
+          "createdAt": "2026-03-18T20:09:18.459Z"
+        },
+        {
+          "id": "place_ceb855a718",
+          "name": "Burger King",
+          "createdByUserId": "user_f98596d8d3",
+          "createdAt": "2026-03-18T20:11:51.372Z"
+        },
+        {
+          "id": "place_fed5156b92",
+          "name": "McDonalds",
+          "createdByUserId": "user_f98596d8d3",
+          "createdAt": "2026-03-18T20:11:58.143Z"
+        }
+      ],
+      "votes": [
+        {
+          "userId": "user_f98596d8d3",
+          "placeId": "place_3526a3446a",
+          "votedAt": "2026-03-18T20:11:32.732Z"
+        },
+        {
+          "userId": "user_f98596d8d3",
+          "placeId": "place_ceb855a718",
+          "votedAt": "2026-03-18T20:12:19.594Z"
+        },
+        {
+          "userId": "user_f98596d8d3",
+          "placeId": "place_fed5156b92",
+          "votedAt": "2026-03-18T20:12:20.829Z"
+        }
+      ],
+      "orders": [],
+      "sharedCosts": [],
+      "notifications": [],
+      "voting": null,
+      "pushSubscriptions": []
+    },
+    {
+      "id": "lobby_81247ce1ba",
+      "name": "2026.03.19. Csütörtök",
+      "code": "260319",
+      "createdAt": "2026-03-18T20:09:45.875Z",
+      "users": [
+        {
+          "id": "user_732854218d",
+          "name": "Martin",
+          "createdAt": "2026-03-18T20:09:54.887Z"
+        }
+      ],
+      "places": [],
+      "votes": [],
+      "orders": [],
       "sharedCosts": [],
       "notifications": [],
       "voting": null,

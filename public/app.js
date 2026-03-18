@@ -131,6 +131,88 @@ function renderNotifications() {
   }
 }
 
+async function toggleVoteByPlaceName(placeName) {
+  const existing = state.places.find(
+    (p) => String(p.name || "").toLowerCase() === String(placeName || "").toLowerCase()
+  );
+  if (existing) {
+    state = await api("/api/votes", "POST", { placeId: existing.id }, userToken);
+    return;
+  }
+  state = await api("/api/places", "POST", { name: placeName }, userToken);
+  const created = state.places.find(
+    (p) => String(p.name || "").toLowerCase() === String(placeName || "").toLowerCase()
+  );
+  if (created) {
+    state = await api("/api/votes", "POST", { placeId: created.id }, userToken);
+  }
+}
+
+function suggestionButton(placeName, labelSuffix, myVotesSet) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "suggestion-btn";
+  const existing = state.places.find(
+    (p) => String(p.name || "").toLowerCase() === String(placeName || "").toLowerCase()
+  );
+  const voted = existing ? myVotesSet.has(existing.id) : false;
+  btn.textContent = `${placeName}${labelSuffix}${voted ? " (voted)" : ""}`;
+  btn.onclick = async () => {
+    try {
+      await toggleVoteByPlaceName(placeName);
+      renderUserState();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+  return btn;
+}
+
+function renderPlaceSuggestions(myVotesSet) {
+  const box = document.getElementById("placeSuggestions");
+  box.innerHTML = "";
+
+  const recent = (state.crossLobbySuggestions?.recent || []).slice(0, 4);
+  const favorites = (state.crossLobbySuggestions?.favorites || []).slice(0, 4);
+
+  if (!recent.length && !favorites.length) {
+    box.classList.add("hidden");
+    return;
+  }
+
+  box.classList.remove("hidden");
+
+  if (recent.length) {
+    const title = document.createElement("p");
+    title.className = "suggestions-title";
+    title.textContent = "Your recent votes";
+    box.appendChild(title);
+
+    const row = document.createElement("div");
+    row.className = "suggestion-row";
+    for (const place of recent) {
+      row.appendChild(suggestionButton(place.name, "", myVotesSet));
+    }
+    box.appendChild(row);
+  }
+
+  if (favorites.length) {
+    const title = document.createElement("p");
+    title.className = "suggestions-title";
+    title.textContent = "Favourites";
+    box.appendChild(title);
+
+    const row = document.createElement("div");
+    row.className = "suggestion-row";
+    for (const place of favorites) {
+      row.appendChild(
+        suggestionButton(place.name, place.count ? ` (${place.count})` : "", myVotesSet)
+      );
+    }
+    box.appendChild(row);
+  }
+}
+
 function notifyBrowser(title, message) {
   if (!("Notification" in window)) return;
   if (Notification.permission === "granted") {
@@ -241,6 +323,7 @@ function renderUserState() {
   const myVotes = new Set(
     state.votes.filter((v) => v.userId === state.me.id).map((v) => v.placeId)
   );
+  renderPlaceSuggestions(myVotes);
   for (const place of state.summary.placesByVotes) {
     const li = document.createElement("li");
     li.textContent = `${place.name} (${place.voteCount} vote${place.voteCount === 1 ? "" : "s"}) `;
